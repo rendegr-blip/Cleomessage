@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cleoms Messages</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="sidebar" aria-label="Conversations">
+        <div class="profile">
+          <div class="avatar" id="profileInitial">?</div>
+          <div>
+            <p class="label">Connecte en tant que</p>
+            <h1 id="profileName">Invite</h1>
+          </div>
+        </div>
+
+        <form class="username-form" id="usernameForm">
+          <label for="usernameInput">Nom d'utilisateur</label>
+          <div class="inline-form">
+            <input id="usernameInput" type="text" maxlength="18" placeholder="Ex: Lina" required />
+            <button type="submit">OK</button>
+          </div>
+        </form>
+
+        <div class="section-title">Utilisateurs</div>
+        <div class="users-list" id="usersList"></div>
+
+        <form class="add-user-form" id="addUserForm">
+          <label for="newUserInput">Ajouter un contact</label>
+          <div class="inline-form">
+            <input id="newUserInput" type="text" maxlength="18" placeholder="Nom" required />
+            <button type="submit">+</button>
+          </div>
+        </form>
+
+        <div class="section-title">Groupes</div>
+        <div class="users-list" id="groupsList"></div>
+
+        <form class="add-user-form" id="groupForm">
+          <label for="groupNameInput">Creer un groupe</label>
+          <input id="groupNameInput" type="text" maxlength="28" placeholder="Nom du groupe" required />
+          <div class="inline-form">
+            <input id="groupMembersInput" type="text" placeholder="Membres: Lina, Sam" required />
+            <button type="submit">+</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="chat-panel" aria-label="Messages">
+        <header class="chat-header">
+          <div>
+            <p class="label">Discussion avec</p>
+            <h2 id="activeChatName">Choisis un utilisateur</h2>
+          </div>
+          <button class="ghost-button" id="clearChatButton" type="button">Effacer</button>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite">
+          <div class="empty-state">
+            Choisis ton nom, selectionne un utilisateur, puis envoie un message.
+          </div>
+        </div>
+
+        <form class="message-form" id="messageForm">
+          <input id="messageInput" type="text" placeholder="Ecris un message..." autocomplete="off" />
+          <button type="submit">Envoyer</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
