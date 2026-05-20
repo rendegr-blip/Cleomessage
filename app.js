@@ -43,6 +43,11 @@ let knownDirectMessageIds = new Set();
 let knownGroupMessageIds = new Set();
 let hasLoadedRemoteState = false;
 
+function updateAppHeight() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${viewportHeight}px`);
+}
+
 function cleanName(name, maxLength = 18) {
   return name.trim().replace(/\s+/g, " ").slice(0, maxLength);
 }
@@ -678,3 +683,8 @@ document.addEventListener("visibilitychange", () => {
     clearUnreadMessages();
   }
 });
+
+updateAppHeight();
+window.addEventListener("resize", updateAppHeight);
+window.visualViewport?.addEventListener("resize", updateAppHeight);
+window.visualViewport?.addEventListener("scroll", updateAppHeight);
