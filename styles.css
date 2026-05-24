@@ -136,6 +136,44 @@ label,
   gap: 8px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.notification-button {
+  height: 38px;
+  padding: 0 12px;
+  color: var(--accent-dark);
+  background: #edf7f7;
+  border: 1px solid #d9eeee;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notification-button:hover:not(:disabled) {
+  background: #d9eeee;
+}
+
+.notification-button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .inline-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

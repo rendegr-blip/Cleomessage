@@ -1,7 +1,11 @@
 create table if not exists public.users (
   username text primary key,
+  notifications_enabled boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.users
+add column if not exists notifications_enabled boolean not null default false;
 
 create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),

@@ -1,4 +1,5 @@
 const USERNAME_KEY = "cleoms_sms_username";
+const NOTIFICATIONS_ENABLED_KEY = "cleoms_sms_notifications_enabled";
 const CONFIG_READY =
   typeof SUPABASE_URL === "string" &&
   typeof SUPABASE_ANON_KEY === "string" &&
@@ -14,6 +15,9 @@ const elements = {
   profileName: document.querySelector("#profileName"),
   usernameForm: document.querySelector("#usernameForm"),
   usernameInput: document.querySelector("#usernameInput"),
+  rememberInput: document.querySelector("#rememberInput"),
+  notificationsInput: document.querySelector("#notificationsInput"),
+  notificationButton: document.querySelector("#notificationButton"),
   usersList: document.querySelector("#usersList"),
   addUserForm: document.querySelector("#addUserForm"),
   newUserInput: document.querySelector("#newUserInput"),
@@ -28,8 +32,26 @@ const elements = {
   messageInput: document.querySelector("#messageInput")
 };
 
+function getStoredUsername() {
+  return localStorage.getItem(USERNAME_KEY) || sessionStorage.getItem(USERNAME_KEY) || "";
+}
+
+function isRememberEnabled() {
+  return Boolean(localStorage.getItem(USERNAME_KEY));
+}
+
+function areNotificationsEnabled() {
+  return localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) === "true";
+}
+
+function saveLocalNotificationPreference(enabled) {
+  localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, String(enabled));
+}
+
 const state = {
-  currentUser: localStorage.getItem(USERNAME_KEY) || "",
+  currentUser: getStoredUsername(),
+  rememberUser: isRememberEnabled(),
+  notificationsEnabled: areNotificationsEnabled(),
   users: [],
   groups: [],
   messages: [],
@@ -42,6 +64,7 @@ let realtimeChannel = null;
 let knownDirectMessageIds = new Set();
 let knownGroupMessageIds = new Set();
 let hasLoadedRemoteState = false;
+let serviceWorkerReady = null;
 
 function updateAppHeight() {
   const viewportHeight = window.visualViewport?.height || window.innerHeight;
@@ -74,6 +97,118 @@ function formatSupabaseError(prefix, error) {
 
 function updatePageTitle() {
   document.title = state.unreadCount > 0 ? `Nouveau message (${state.unreadCount})` : DEFAULT_TITLE;
+}
+
+function saveSessionUsername(username) {
+  localStorage.removeItem(USERNAME_KEY);
+  sessionStorage.removeItem(USERNAME_KEY);
+
+  if (!username) {
+    return;
+  }
+
+  const storage = state.rememberUser ? localStorage : sessionStorage;
+  storage.setItem(USERNAME_KEY, username);
+}
+
+async function saveNotificationPreference(username = state.currentUser) {
+  if (!db || !username) {
+    return true;
+  }
+
+  const { error } = await db
+    .from("users")
+    .update({ notifications_enabled: state.notificationsEnabled })
+    .eq("username", username);
+
+  if (error) {
+    showError(formatSupabaseError("Impossible d'enregistrer le choix des notifications.", error));
+    return false;
+  }
+
+  return true;
+}
+
+function supportsNotifications() {
+  return "Notification" in window;
+}
+
+function updateNotificationButton() {
+  if (!elements.notificationButton) {
+    return;
+  }
+
+  if (!supportsNotifications()) {
+    elements.notificationButton.textContent = "Notifications indisponibles";
+    elements.notificationButton.disabled = true;
+    return;
+  }
+
+  if (!state.notificationsEnabled) {
+    elements.notificationButton.textContent = "Notifications desactivees";
+    elements.notificationButton.disabled = true;
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    elements.notificationButton.textContent = "Notifications activees";
+    elements.notificationButton.disabled = true;
+    return;
+  }
+
+  if (Notification.permission === "denied") {
+    elements.notificationButton.textContent = "Notifications bloquees";
+    elements.notificationButton.disabled = true;
+    return;
+  }
+
+  elements.notificationButton.textContent = "Autoriser dans Safari";
+  elements.notificationButton.disabled = false;
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || !window.isSecureContext) {
+    return;
+  }
+
+  serviceWorkerReady = navigator.serviceWorker.register("sw.js").catch((error) => {
+    console.warn("Service worker indisponible", error);
+    return null;
+  });
+}
+
+async function sendBrowserNotification(title, body) {
+  if (!state.notificationsEnabled || !supportsNotifications() || Notification.permission !== "granted") {
+    return;
+  }
+
+  if (!document.hidden && document.hasFocus()) {
+    return;
+  }
+
+  if (serviceWorkerReady) {
+    const registration = await serviceWorkerReady;
+
+    if (registration?.showNotification) {
+      await registration.showNotification(title, {
+        body,
+        icon: "assets/chat.jpg",
+        badge: "assets/chat.jpg"
+      });
+      return;
+    }
+  }
+
+  const notification = new Notification(title, {
+    body,
+    icon: "assets/chat.jpg",
+    badge: "assets/chat.jpg"
+  });
+
+  notification.addEventListener("click", () => {
+    window.focus();
+    notification.close();
+  });
 }
 
 function clearUnreadMessages() {
@@ -131,21 +266,33 @@ function trackIncomingMessages(directMessages, groupMessages) {
     return;
   }
 
-  const directIncoming = directMessages.filter((message) => {
+  const directIncomingMessages = directMessages.filter((message) => {
     return (
       !knownDirectMessageIds.has(message.id) &&
       message.receiver === state.currentUser &&
       message.sender !== state.currentUser
     );
-  }).length;
+  });
 
-  const groupIncoming = groupMessages.filter((message) => {
+  const groupIncomingMessages = groupMessages.filter((message) => {
     return !knownGroupMessageIds.has(message.id) && message.sender !== state.currentUser;
-  }).length;
+  });
+
+  const directIncoming = directIncomingMessages.length;
+  const groupIncoming = groupIncomingMessages.length;
 
   if (directIncoming + groupIncoming > 0) {
     state.unreadCount += directIncoming + groupIncoming;
     updatePageTitle();
+
+    const firstMessage = directIncomingMessages[0] || groupIncomingMessages[0];
+    const notificationTitle =
+      directIncoming + groupIncoming > 1
+        ? `${directIncoming + groupIncoming} nouveaux messages`
+        : `Nouveau message de ${firstMessage.sender}`;
+    sendBrowserNotification(notificationTitle, firstMessage.content).catch((error) => {
+      console.warn("Notification non envoyee", error);
+    });
   }
 
   knownDirectMessageIds = nextDirectIds;
@@ -157,6 +304,9 @@ function renderProfile() {
   elements.profileName.textContent = name;
   elements.profileInitial.textContent = getInitial(name);
   elements.usernameInput.value = state.currentUser;
+  elements.rememberInput.checked = state.rememberUser;
+  elements.notificationsInput.checked = state.notificationsEnabled;
+  updateNotificationButton();
 }
 
 function createChatButton({ id, name, type, detail }) {
@@ -315,10 +465,12 @@ async function loadRemoteState() {
   }
 
   const [
+    { data: userSettings, error: userError },
     { data: contacts, error: contactsError },
     { data: directMessages, error: messagesError },
     { data: memberships, error: membershipsError }
   ] = await Promise.all([
+    db.from("users").select("notifications_enabled").eq("username", state.currentUser).maybeSingle(),
     db.from("contacts").select("contact, created_at").eq("owner", state.currentUser).order("created_at", {
       ascending: true
     }),
@@ -330,12 +482,15 @@ async function loadRemoteState() {
       .order("created_at", { ascending: true })
   ]);
 
-  if (contactsError || messagesError || membershipsError) {
-    const error = contactsError || messagesError || membershipsError;
+  if (userError || contactsError || messagesError || membershipsError) {
+    const error = userError || contactsError || messagesError || membershipsError;
     showError(formatSupabaseError("Connexion Supabase impossible.", error));
     console.error("Erreur Supabase", error);
     return;
   }
+
+  state.notificationsEnabled = Boolean(userSettings?.notifications_enabled);
+  saveLocalNotificationPreference(state.notificationsEnabled);
 
   const groups = (memberships || []).map((membership) => membership.groups).filter(Boolean);
   const groupIds = groups.map((group) => group.id);
@@ -443,7 +598,8 @@ async function handleRenameUser(oldName) {
 
   if (state.currentUser === oldName) {
     resetSessionState(newName);
-    localStorage.setItem(USERNAME_KEY, newName);
+    saveSessionUsername(newName);
+    await saveNotificationPreference(newName);
   }
 
   if (activeChat?.type === "direct" && activeChat.id === oldName) {
@@ -538,7 +694,8 @@ elements.usernameForm.addEventListener("submit", async (event) => {
     }
 
     resetSessionState(username);
-    localStorage.setItem(USERNAME_KEY, username);
+    saveSessionUsername(username);
+    await saveNotificationPreference(username);
     render();
     await loadRemoteState();
     return;
@@ -550,9 +707,43 @@ elements.usernameForm.addEventListener("submit", async (event) => {
   }
 
   resetSessionState(username);
-  localStorage.setItem(USERNAME_KEY, username);
+  saveSessionUsername(username);
+  await saveNotificationPreference(username);
   render();
   await loadRemoteState();
+});
+
+elements.rememberInput.addEventListener("change", () => {
+  state.rememberUser = elements.rememberInput.checked;
+  saveSessionUsername(state.currentUser);
+});
+
+elements.notificationsInput.addEventListener("change", async () => {
+  state.notificationsEnabled = elements.notificationsInput.checked;
+  saveLocalNotificationPreference(state.notificationsEnabled);
+
+  if (state.notificationsEnabled && supportsNotifications() && Notification.permission === "default") {
+    await Notification.requestPermission();
+  }
+
+  if (supportsNotifications() && Notification.permission === "denied") {
+    state.notificationsEnabled = false;
+    elements.notificationsInput.checked = false;
+    saveLocalNotificationPreference(false);
+  }
+
+  await saveNotificationPreference();
+  updateNotificationButton();
+});
+
+elements.notificationButton.addEventListener("click", async () => {
+  if (!supportsNotifications() || Notification.permission !== "default") {
+    updateNotificationButton();
+    return;
+  }
+
+  await Notification.requestPermission();
+  updateNotificationButton();
 });
 
 elements.addUserForm.addEventListener("submit", async (event) => {
@@ -675,6 +866,7 @@ elements.clearChatButton.addEventListener("click", async () => {
 });
 
 subscribeToRealtime();
+registerServiceWorker();
 loadRemoteState();
 
 window.addEventListener("focus", clearUnreadMessages);

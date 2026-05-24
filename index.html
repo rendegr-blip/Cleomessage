@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CleoMessages</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="CleoMessages" />
+    <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -27,6 +30,17 @@
             <input id="usernameInput" type="text" maxlength="18" placeholder="Ex: Lina" required />
             <button type="submit">OK</button>
           </div>
+          <label class="checkbox-row" for="rememberInput">
+            <input id="rememberInput" type="checkbox" />
+            <span>Rester connecte</span>
+          </label>
+          <label class="checkbox-row" for="notificationsInput">
+            <input id="notificationsInput" type="checkbox" />
+            <span>Notifications</span>
+          </label>
+          <button class="notification-button" id="notificationButton" type="button">
+            Activer notifications
+          </button>
         </form>
 
         <div class="section-title">Utilisateurs</div>
